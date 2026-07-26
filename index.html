@@ -545,7 +545,8 @@
 <div id="chat-panel">
   <div class="chat-header">
     <i class="ti ti-message-circle" style="color:var(--accent);font-size:15px;"></i>
-    <span class="chat-header-title">Chat Realtime</span>
+    <span class="chat-header-title">Chat Realtime <span id="chat-viewer-name" style="font-size:10px;color:var(--t3);font-weight:400;"></span></span>
+    <button class="chat-close-btn" onclick="changeViewerName()" title="Ganti nama" style="margin-right:2px;"><i class="ti ti-pencil"></i></button>
     <button class="chat-close-btn" onclick="toggleChat()"><i class="ti ti-x"></i></button>
   </div>
   <div class="chat-messages" id="chat-messages">
@@ -921,16 +922,32 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-// Show name prompt after short delay
+// ── Nama tersimpan di localStorage ──────────────────────────────
+const STORAGE_KEY = 'lks2026_viewer_name';
+
+function loadSavedName() {
+  try { return localStorage.getItem(STORAGE_KEY) || null; } catch { return null; }
+}
+function saveName(name) {
+  try { if (name) localStorage.setItem(STORAGE_KEY, name); else localStorage.removeItem(STORAGE_KEY); } catch {}
+}
+
+// Init: cek apakah sudah ada nama tersimpan
 setTimeout(() => {
-  document.getElementById('name-modal').style.display = 'flex';
-  setTimeout(() => {
-    const inp = document.getElementById('name-input');
-    if (inp) {
-      inp.focus();
-      inp.addEventListener('keydown', e => { if (e.key === 'Enter') confirmName(); });
-    }
-  }, 80);
+  const saved = loadSavedName();
+  if (saved) {
+    viewerName = saved;
+    startChatMode();          // langsung masuk mode chat, modal tidak muncul
+  } else {
+    document.getElementById('name-modal').style.display = 'flex';
+    setTimeout(() => {
+      const inp = document.getElementById('name-input');
+      if (inp) {
+        inp.focus();
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') confirmName(); });
+      }
+    }, 80);
+  }
 }, 800);
 
 function confirmName() {
@@ -941,18 +958,33 @@ function confirmName() {
     return;
   }
   viewerName = name;
+  saveName(name);
   startChatMode();
 }
 window.confirmName = confirmName;
 
 function skipChat() {
   viewerName = null;
+  saveName(null);
   document.getElementById('name-modal').style.display = 'none';
   // Still show FAB (read-only)
   document.getElementById('chat-fab').style.display = 'block';
-  initChatSubscription();
+  if (!window._chatSubscribed) {
+    window._chatSubscribed = true;
+    initChatSubscription();
+  }
 }
 window.skipChat = skipChat;
+
+/** Ganti nama — tampilkan modal lagi dengan nama lama terisi */
+function changeViewerName() {
+  const modal = document.getElementById('name-modal');
+  const inp   = document.getElementById('name-input');
+  if (inp && viewerName) inp.value = viewerName;
+  if (modal) modal.style.display = 'flex';
+  setTimeout(() => { if (inp) inp.focus(); }, 80);
+}
+window.changeViewerName = changeViewerName;
 
 function startChatMode() {
   document.getElementById('name-modal').style.display = 'none';
@@ -961,8 +993,15 @@ function startChatMode() {
   const btn = document.getElementById('chat-send-btn');
   if (inp) { inp.disabled = false; inp.placeholder = `Pesan sebagai ${viewerName}...`; }
   if (btn) btn.disabled = false;
+  // Tampilkan nama di header chat
+  const nameTag = document.getElementById('chat-viewer-name');
+  if (nameTag) nameTag.textContent = viewerName;
   document.getElementById('chat-fab').style.display = 'block';
-  initChatSubscription();
+  // Jika sudah berlangganan sebelumnya, tidak perlu ulang
+  if (!window._chatSubscribed) {
+    window._chatSubscribed = true;
+    initChatSubscription();
+  }
 }
 
 function initChatSubscription() {
