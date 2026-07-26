@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LKS Robotik 2026 – Live Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #111218;
+      --s1:        #1C1E27;
+      --s2:        #252830;
+      --s3:        #2E3140;
+      --border:    rgba(255,255,255,0.10);
+      --border-s:  rgba(255,255,255,0.18);
+      --accent:    #E8A23C;
+      --accent-bg: rgba(232,162,60,0.10);
+      --accent-bd: rgba(232,162,60,0.28);
+      --success:   #4CAF7D;
+      --success-bg:rgba(76,175,125,0.10);
+      --success-bd:rgba(76,175,125,0.28);
+      --warn:      #D4A24A;
+      --warn-bg:   rgba(212,162,74,0.10);
+      --warn-bd:   rgba(212,162,74,0.28);
+      --danger:    #E07070;
+      --t1:        #ECEEF2;
+      --t2:        #9099A8;
+      --t3:        #525B6A;
+      --r-sm: 4px; --r-md: 6px; --r-lg: 8px;
+      --font-display: 'Sora', sans-serif;
+      --font-body:    'Plus Jakarta Sans', sans-serif;
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--t1);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    .v-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px;
+      height: 52px;
+      background: var(--s1);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .v-header-left { display: flex; align-items: center; gap: 14px; }
+    .v-badge {
+      background: var(--accent-bg); color: var(--accent);
+      font-family: var(--font-display);
+      font-size: 10px; font-weight: 600;
+      padding: 2px 8px; border-radius: var(--r-sm);
+      border: 1px solid var(--accent-bd);
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .v-title {
+      font-family: var(--font-display);
+      font-size: 14px; font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+    .v-live-dot {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 500;
+      color: var(--success);
+      letter-spacing: 0.04em;
+    }
+    .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity:1; }
+      50%      { opacity:0.35; }
+    }
+    #v-last-update { font-size: 11px; color: var(--t3); }
+
+    /* ── Page ── */
+    .v-page { max-width: 960px; margin: 0 auto; padding: 28px 24px 64px; }
+
+    /* ── Section label ── */
+    .sec-label {
+      font-size: 10px; font-weight: 600; color: var(--t3);
+      letter-spacing: 0.10em; text-transform: uppercase;
+      margin: 0 0 12px;
+    }
+
+    /* ── Focus Banner ── */
+    .focus-banner {
+      border-radius: var(--r-lg);
+      padding: 20px 20px;
+      margin-bottom: 16px;
+      border: 1px solid var(--accent-bd);
+      background: var(--accent-bg);
+    }
+    .focus-top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .focus-avatar {
+      width: 52px; height: 52px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-display); font-size: 15px; font-weight: 600;
+      flex-shrink: 0;
+    }
+    .focus-info { flex: 1; min-width: 0; }
+    .focus-label {
+      font-size: 10px; color: var(--accent); font-weight: 600;
+      letter-spacing: 0.10em; text-transform: uppercase; margin-bottom: 4px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .focus-name {
+      font-family: var(--font-display); font-size: 20px; font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--t1); line-height: 1.2; margin-bottom: 2px;
+    }
+    .focus-region { font-size: 12px; color: var(--t2); }
+    .prog-wrap {
+      background: rgba(0,0,0,0.25); border-radius: 2px;
+      height: 3px; overflow: hidden; margin-top: 8px;
+    }
+    .prog-bar { height: 3px; border-radius: 2px; background: var(--accent); transition: width 0.5s ease; }
+
+    /* ── Accordion ── */
+    .accordion-list { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+
+    .accordion {
+      background: var(--s1);
+      border: 1px solid var(--border-s);
+      border-radius: var(--r-md);
+      overflow: hidden;
+    }
+    .accordion-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 14px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .accordion-header:hover { background: var(--s2); }
+    .accordion-header.open  { background: var(--s2); }
+
+    .acc-icon { font-size: 15px; color: var(--accent); flex-shrink: 0; }
+    .acc-label {
+      font-family: var(--font-display);
+      font-size: 12px; font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--t1); flex: 1;
+    }
+    .acc-badge {
+      font-size: 10px; padding: 2px 7px; border-radius: var(--r-sm); flex-shrink: 0;
+      font-weight: 500; letter-spacing: 0.02em;
+    }
+    .acc-badge.done    { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-bd); }
+    .acc-badge.partial { background: var(--warn-bg);    color: var(--warn);    border: 1px solid var(--warn-bd); }
+    .acc-badge.empty   { background: var(--s2);         color: var(--t3);      border: 1px solid var(--border); }
+
+    .acc-chevron {
+      font-size: 14px; color: var(--t3); flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+    .accordion-header.open .acc-chevron { transform: rotate(180deg); }
+
+    .accordion-body {
+      display: none;
+      border-top: 1px solid var(--border);
+      padding: 10px 12px;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .accordion-body.open { display: flex; }
+
+    /* Sub poin item */
+    .sub-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 7px 10px;
+      border-radius: var(--r-sm);
+      border: 1px solid transparent;
+      transition: background 0.1s;
+    }
+    .sub-item.checked {
+      background: var(--success-bg);
+      border-color: var(--success-bd);
+    }
+    .sub-item.bonus { border-color: var(--warn-bd); }
+    .sub-item.checked.bonus {
+      background: rgba(212,162,74,0.07);
+      border-color: var(--warn-bd);
+    }
+
+    .sub-checkbox {
+      width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0;
+      border: 1.5px solid var(--border-s);
+      display: flex; align-items: center; justify-content: center;
+      margin-top: 2px;
+    }
+    .sub-checkbox.checked { background: var(--success); border-color: var(--success); }
+    .sub-checkbox.checked::after {
+      content: '';
+      width: 3px; height: 7px;
+      border: 2px solid var(--bg);
+      border-top: none; border-left: none;
+      transform: rotate(45deg) translateY(-1px);
+      display: block;
+    }
+    .sub-checkbox.bonus-check { border-color: var(--warn-bd); }
+    .sub-checkbox.checked.bonus-check { background: var(--warn); border-color: var(--warn); }
+
+    .sub-text { flex: 1; }
+    .sub-label { font-size: 13px; font-weight: 500; color: var(--t1); line-height: 1.45; }
+    .sub-desc  { font-size: 11px; color: var(--t2); margin-top: 1px; }
+
+    .color-dot {
+      display: inline-block; width: 7px; height: 7px;
+      border-radius: 50%; margin-right: 5px; vertical-align: middle;
+    }
+    .bonus-star {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 10px; color: var(--warn); margin-left: 6px;
+      background: var(--warn-bg); border-radius: 3px; padding: 1px 5px;
+    }
+
+    /* ── Cube group label ── */
+    .v-group-label {
+      font-size: 10px; font-weight: 600; color: var(--t3);
+      letter-spacing: 0.07em; text-transform: uppercase;
+      padding: 8px 4px 3px;
+      margin-top: 4px;
+      display: flex; align-items: center; gap: 5px;
+      border-top: 1px solid var(--border);
+    }
+    .v-group-label:first-child { border-top: none; margin-top: 0; }
+    .v-group-label.bonus-group { color: var(--warn); }
+    .v-group-prog {
+      margin-left: auto; font-size: 10px; font-weight: 500;
+      background: var(--s3); padding: 1px 6px; border-radius: 3px;
+      color: var(--t3);
+    }
+
+    /* ── No active ── */
+    .no-active {
+      border: 1px dashed var(--border-s); border-radius: var(--r-lg);
+      padding: 32px 24px; text-align: center; margin-bottom: 16px;
+      color: var(--t3); font-size: 13px; line-height: 1.7;
+    }
+    .no-active i { font-size: 26px; display: block; margin-bottom: 10px; opacity: 0.35; }
+
+    /* ── Metric row ── */
+    .metric-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
+      gap: 8px; margin-bottom: 28px;
+    }
+    .metric-card {
+      background: var(--s1); border: 1px solid var(--border);
+      border-radius: var(--r-md); padding: 14px 16px;
+    }
+    .metric-num {
+      font-family: var(--font-display);
+      font-size: 20px; font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--t1); line-height: 1.2;
+    }
+    .metric-num.accent { color: var(--accent); }
+    .metric-num span { font-size: 13px; color: var(--t3); font-weight: 400; }
+    .metric-lbl { font-size: 11px; color: var(--t3); margin-top: 3px; }
+
+    /* ── Contingent table ── */
+    .cont-table { display: flex; flex-direction: column; gap: 6px; }
+    .cont-wrap {
+      background: var(--s1); border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+    .cont-wrap.active-wrap { border-color: var(--accent-bd); }
+    .cont-row {
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .cont-row:hover { background: var(--s2); }
+    .cont-row.active-row { background: var(--accent-bg); }
+    .cont-avatar {
+      width: 38px; height: 38px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-display); font-size: 12px; font-weight: 600; flex-shrink: 0;
+    }
+    .cont-info { flex: 1; min-width: 0; }
+    .cont-name {
+      font-family: var(--font-display);
+      font-size: 13px; font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+    .cont-region { font-size: 12px; color: var(--t2); margin-top: 1px; }
+    .cont-pills { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+    .a-pill {
+      font-size: 11px; padding: 2px 7px; border-radius: var(--r-sm);
+      border: 1px solid var(--border); background: var(--s2); color: var(--t2);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .a-pill.full    { background: var(--success-bg); border-color: var(--success-bd); color: var(--success); }
+    .a-pill.partial { background: var(--warn-bg);    border-color: var(--warn-bd);    color: var(--warn); }
+    .cont-pct {
+      font-family: var(--font-display); font-size: 16px; font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--accent); text-align: right; flex-shrink: 0;
+    }
+    .cont-pct-sub { font-size: 11px; color: var(--t3); }
+    .cont-expand-icon {
+      font-size: 14px; color: var(--t3); flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+    .cont-expand-icon.open { transform: rotate(180deg); }
+    .cont-detail {
+      display: none;
+      border-top: 1px solid var(--border);
+      padding: 12px 14px;
+    }
+    .cont-detail.open { display: block; }
+
+    /* ── Loading / Error ── */
+    .v-loading {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px;
+      padding: 80px 20px; color: var(--t2); font-size: 13px;
+    }
+    .v-loading i { font-size: 28px; color: var(--accent); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.9s linear infinite; display: inline-block; }
+    .v-error {
+      background: rgba(224,112,112,0.08); border: 1px solid rgba(224,112,112,0.25);
+      border-radius: var(--r-lg); padding: 18px 20px; color: var(--danger);
+      font-size: 13px; margin: 32px auto; max-width: 480px; text-align: center;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 3px; }
+
+    @media (max-width: 600px) {
+      .v-page { padding: 16px 16px 52px; }
+      .v-header { padding: 0 16px; }
+      .focus-name { font-size: 17px; }
+      #chat-panel { width: calc(100vw - 32px); right: 16px; }
+    }
+
+    /* ── Name Prompt Modal ── */
+    #name-modal {
+      position: fixed; inset: 0;
+      background: rgba(17,18,24,0.92);
+      z-index: 9000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .name-box {
+      background: var(--s1);
+      border: 1px solid var(--border-s);
+      border-radius: var(--r-lg);
+      padding: 28px 24px;
+      max-width: 360px; width: 100%;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .name-badge {
+      background: var(--accent-bg); color: var(--accent);
+      border: 1px solid var(--accent-bd);
+      font-family: var(--font-display);
+      font-size: 10px; font-weight: 600;
+      padding: 2px 8px; border-radius: var(--r-sm);
+      letter-spacing: 0.08em; text-transform: uppercase;
+      align-self: flex-start;
+    }
+    .name-title {
+      font-family: var(--font-display);
+      font-size: 18px; font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .name-sub { font-size: 13px; color: var(--t2); line-height: 1.6; }
+    .name-input {
+      background: var(--bg); border: 1px solid var(--border-s);
+      border-radius: var(--r-sm); color: var(--t1);
+      font-family: var(--font-body);
+      font-size: 14px; padding: 9px 13px; outline: none; width: 100%;
+      transition: border-color 0.15s;
+    }
+    .name-input:focus { border-color: var(--accent-bd); }
+    .name-input.err { border-color: var(--danger); animation: shake 0.25s ease; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+    .name-btn {
+      background: var(--accent); color: var(--bg); border: none;
+      border-radius: var(--r-sm); padding: 10px;
+      font-family: var(--font-body);
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: opacity 0.15s;
+    }
+    .name-btn:hover { opacity: 0.88; }
+    .name-skip {
+      font-size: 12px; color: var(--t3); text-align: center;
+      cursor: pointer; text-decoration: underline;
+      transition: color 0.15s;
+    }
+    .name-skip:hover { color: var(--t2); }
+
+    /* ── Chat FAB ── */
+    #chat-fab {
+      position: fixed; bottom: 24px; right: 20px; z-index: 800;
+    }
+    .chat-fab-btn {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--accent); color: var(--bg); border: none;
+      font-size: 18px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      transition: opacity 0.15s; position: relative;
+    }
+    .chat-fab-btn:hover { opacity: 0.88; }
+    .chat-fab-badge {
+      position: absolute; top: -3px; right: -3px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--danger);
+      font-size: 9px; font-weight: 700; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--bg);
+    }
+
+    /* ── Chat Panel ── */
+    #chat-panel {
+      position: fixed; bottom: 80px; right: 20px;
+      width: 312px; max-height: 440px;
+      background: var(--s1); border: 1px solid var(--border-s);
+      border-radius: var(--r-lg); box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      z-index: 799; display: none; flex-direction: column; overflow: hidden;
+    }
+    #chat-panel.open { display: flex; }
+    .chat-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 11px 14px;
+      background: var(--s2); border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .chat-header-title {
+      font-family: var(--font-display);
+      font-size: 12px; font-weight: 600; flex: 1;
+    }
+    .chat-close-btn {
+      background: none; border: none; color: var(--t3); cursor: pointer;
+      font-size: 16px; display: flex; align-items: center;
+      transition: color 0.15s;
+    }
+    .chat-close-btn:hover { color: var(--t1); }
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 10px;
+      display: flex; flex-direction: column; gap: 7px;
+    }
+    .chat-empty {
+      text-align: center; color: var(--t3); font-size: 12px;
+      padding: 24px 0; font-style: italic;
+    }
+    .chat-msg { max-width: 86%; display: flex; flex-direction: column; gap: 2px; }
+    .chat-msg-me    { align-self: flex-end; }
+    .chat-msg-other { align-self: flex-start; }
+    .chat-msg-sender {
+      font-size: 10px; color: var(--t3); font-weight: 500;
+      display: flex; align-items: center; gap: 3px;
+    }
+    .sender-admin { color: var(--accent); }
+    .chat-msg-time { margin-left: 4px; font-weight: 400; opacity: 0.6; }
+    .chat-msg-text {
+      font-size: 13px; color: var(--t1);
+      background: var(--s2); border: 1px solid var(--border);
+      border-radius: var(--r-md); padding: 6px 10px;
+      word-break: break-word; line-height: 1.5;
+    }
+    .chat-msg-me .chat-msg-text { background: var(--accent-bg); border-color: var(--accent-bd); }
+    .chat-msg-admin-self .chat-msg-text { background: var(--accent-bg); border-color: var(--accent-bd); }
+    .chat-input-row {
+      display: flex; gap: 8px; padding: 9px 11px;
+      border-top: 1px solid var(--border);
+      background: var(--s2); flex-shrink: 0;
+    }
+    .chat-input {
+      flex: 1; background: var(--bg); border: 1px solid var(--border-s);
+      border-radius: var(--r-sm); color: var(--t1);
+      font-family: var(--font-body);
+      font-size: 13px; padding: 7px 10px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .chat-input:focus { border-color: var(--accent-bd); }
+    .chat-input::placeholder { color: var(--t3); font-size: 12px; }
+    .chat-input:disabled { opacity: 0.4; }
+    .chat-send-btn {
+      width: 32px; height: 32px; border-radius: var(--r-sm);
+      background: var(--accent); color: var(--bg); border: none;
+      font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .chat-send-btn:hover { opacity: 0.85; }
+    .chat-send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+<header class="v-header">
+  <div class="v-header-left">
+    <span class="v-badge">LKS 2026</span>
+    <span class="v-title">Live Viewer</span>
+    <span class="v-live-dot"><span class="dot"></span> LIVE</span>
+  </div>
+  <div class="v-header-right">
+    <span id="v-last-update">Menghubungkan...</span>
+  </div>
+</header>
+
+<!-- Name prompt modal -->
+<div id="name-modal" style="display:none;">
+  <div class="name-box">
+    <span class="name-badge">LKS 2026 – Chat</span>
+    <div class="name-title">Ikut Chat?</div>
+    <div class="name-sub">Masukkan nama yang akan tampil di chat. Kalau tidak mau chat, langsung skip saja.</div>
+    <input id="name-input" class="name-input" type="text"
+           placeholder="Nama kamu..." maxlength="40" />
+    <button class="name-btn" onclick="confirmName()">
+      <i class="ti ti-check"></i> Mulai Chat
+    </button>
+    <span class="name-skip" onclick="skipChat()">Tidak, lewati saja →</span>
+  </div>
+</div>
+
+<!-- Chat FAB + Panel -->
+<div id="chat-fab" style="display:none;">
+  <button class="chat-fab-btn" onclick="toggleChat()" title="Chat">
+    <i class="ti ti-message-circle"></i>
+    <span id="chat-fab-badge" class="chat-fab-badge" style="display:none;"></span>
+  </button>
+</div>
+<div id="chat-panel">
+  <div class="chat-header">
+    <i class="ti ti-message-circle" style="color:var(--accent);font-size:15px;"></i>
+    <span class="chat-header-title">Chat Realtime</span>
+    <button class="chat-close-btn" onclick="toggleChat()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-empty">Belum ada pesan</div>
+  </div>
+  <div class="chat-input-row">
+    <input id="chat-input" class="chat-input" type="text"
+           placeholder="Tulis pesan..." maxlength="300"
+           disabled onkeydown="if(event.key==='Enter')sendViewerChat()" />
+    <button class="chat-send-btn" id="chat-send-btn" onclick="sendViewerChat()" disabled>
+      <i class="ti ti-send"></i>
+    </button>
+  </div>
+</div>
+
+<main class="v-page" id="v-main">
+  <div class="v-loading">
+    <i class="ti ti-loader-2 spin"></i>
+    <span>Menghubungkan ke Firebase...</span>
+  </div>
+</main>
+
+<script type="module">
+import { subscribeState, subscribeChat, sendChatMessage } from './firebase.js';
+
+// ── Data definitions (mirror of app.js) ─────────────────────────
+const CUBES = [
+  { id: 'r-circle', label: 'Merah – Lingkaran', color: '#EF4444' },
+  { id: 'r-tri',    label: 'Merah – Segitiga',  color: '#EF4444' },
+  { id: 'r-rect',   label: 'Merah – Persegi',   color: '#EF4444' },
+  { id: 'g-circle', label: 'Hijau – Lingkaran', color: '#22C55E' },
+  { id: 'g-tri',    label: 'Hijau – Segitiga',  color: '#22C55E' },
+  { id: 'g-rect',   label: 'Hijau – Persegi',   color: '#22C55E' },
+  { id: 'b-circle', label: 'Biru – Lingkaran',  color: '#3B82F6' },
+  { id: 'b-tri',    label: 'Biru – Segitiga',   color: '#3B82F6' },
+  { id: 'b-rect',   label: 'Biru – Persegi',    color: '#3B82F6' },
+];
+
+// Generate sub-checklist items untuk satu kubus
+function cubeSubItems(prefix, cube) {
+  return [
+    { id: `${prefix}_${cube.id}_touch`,   label: `${cube.label} – Menyentuh kubus`,         cubeId: cube.id, cubeColor: cube.color },
+    { id: `${prefix}_${cube.id}_pick`,    label: `${cube.label} – Mengambil kubus`,          cubeId: cube.id, cubeColor: cube.color },
+    { id: `${prefix}_${cube.id}_place`,   label: `${cube.label} – Meletakkan ke rak`,        cubeId: cube.id, cubeColor: cube.color },
+    { id: `${prefix}_${cube.id}_correct`, label: `${cube.label} – Posisi benar di rak`,      cubeId: cube.id, cubeColor: cube.color },
+  ];
+}
+function buildCSessionItems(prefix) {
+  return [
+    { id: `${prefix}_home_out`,    label: 'Robot keluar dari home',               sub: 'Robot berhasil bergerak keluar dari zona home untuk memulai misi' },
+    ...CUBES.flatMap(c => cubeSubItems(prefix, c)),
+    { id: `${prefix}_home_return`, label: 'Robot kembali ke home (misi selesai)', sub: 'Robot berhasil kembali ke zona home setelah menyelesaikan seluruh misi' },
+  ];
+}
+
+const CHECKLIST_FULL = {
+  perakitan: [
+    { id: 'assemble_lifter', label: 'Merakit lifter', sub: 'Dinyatakan selesai dalam batas waktu 2 jam' },
+  ],
+  gerakan: [
+    { id: 'd1',  label: 'D1 – Maju, mundur, kiri, kanan', sub: 'Robot bergerak ke empat arah secara manual' },
+    { id: 'd2',  label: 'D2 – Deteksi halangan',           sub: 'Robot bergerak dan mendeteksi halangan di jalurnya' },
+    { id: 'd3',  label: 'D3 – Ikuti garis hitam (U)',       sub: 'Robot mengikuti garis hitam berbentuk U secara otonom' },
+    { id: 'd4',  label: 'D4 – Deteksi kubus merah',        sub: 'Robot mendeteksi dan mengidentifikasi kubus berwarna merah' },
+    { id: 'd5',  label: 'D5 – Deteksi kubus hijau',        sub: 'Robot mendeteksi dan mengidentifikasi kubus berwarna hijau' },
+    { id: 'd6',  label: 'D6 – Deteksi kubus biru',         sub: 'Robot mendeteksi dan mengidentifikasi kubus berwarna biru' },
+    { id: 'd7',  label: 'D7 – Deteksi lingkaran hijau',    sub: 'Robot mendeteksi bentuk lingkaran berwarna hijau' },
+    { id: 'd8',  label: 'D8 – Deteksi lingkaran merah',    sub: 'Robot mendeteksi bentuk lingkaran berwarna merah' },
+    { id: 'd9',  label: 'D9 – Ambil kubus dari rak',       sub: 'Lengan robot bergerak otonom mengambil dan membawa kubus dari rak' },
+    { id: 'd10', label: 'D10 – Letakkan ke standbox',      sub: 'Lengan robot bergerak otonom meletakkan kubus ke standbox' },
+  ],
+  c1: buildCSessionItems('c1'),
+  c2: buildCSessionItems('c2'),
+};
+
+const ASSESSMENTS = [
+  { id: 'perakitan', label: 'Perakitan Robot',      icon: 'ti-tool',    pct: 10 },
+  { id: 'gerakan',   label: 'Gerakan Dasar',         icon: 'ti-robot',   pct: 12 },
+  { id: 'c1',        label: 'C1 – Navigasi Otonom', icon: 'ti-route',   pct: 30 },
+  { id: 'c2',        label: 'C2 – Navigasi Otonom', icon: 'ti-route-2', pct: 30 },
+];
+
+// ── Helpers ──────────────────────────────────────────────────────
+function getProgress(scores, contingentId, assessmentId) {
+  const items = CHECKLIST_FULL[assessmentId] || [];
+  if (!items.length) return { done: 0, total: 0 };
+  const sc   = scores[contingentId + '_' + assessmentId] || {};
+  const done = items.filter(it => sc[it.id]).length;
+  return { done, total: items.length };
+}
+
+function overallPct(scores, contingentId) {
+  let done = 0, total = 0;
+  ASSESSMENTS.forEach(a => {
+    const p = getProgress(scores, contingentId, a.id);
+    done += p.done; total += p.total;
+  });
+  return total > 0 ? Math.round(done / total * 100) : 0;
+}
+
+function totalGlobal(contingents, scores) {
+  let done = 0, total = 0;
+  (contingents || []).forEach(c => {
+    ASSESSMENTS.forEach(a => {
+      const p = getProgress(scores, c.id, a.id);
+      done += p.done; total += p.total;
+    });
+  });
+  return { done, total };
+}
+
+function fmtTime(ts) {
+  if (!ts) return '–';
+  return new Date(ts).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function progressBarHTML(pct) {
+  return `<div class="prog-wrap"><div class="prog-bar" style="width:${pct}%"></div></div>`;
+}
+
+function pillClass(done, total) {
+  if (total === 0) return '';
+  if (done === total) return 'full';
+  if (done > 0) return 'partial';
+  return '';
+}
+
+function badgeClass(done, total) {
+  if (total === 0) return 'empty';
+  if (done === total) return 'done';
+  if (done > 0) return 'partial';
+  return 'empty';
+}
+
+// ── Accordion state (persists across re-renders) ─────────────────
+const openAccordions = new Set(); // e.g. 'perakitan', 'gerakan', 'c1', 'c2'
+const openContingents = new Set(); // contingent ids yang sedang di-expand
+
+function toggleContingent(contingentId) {
+  if (openContingents.has(contingentId)) {
+    openContingents.delete(contingentId);
+  } else {
+    openContingents.add(contingentId);
+  }
+  const wrap   = document.querySelector(`.cont-wrap[data-cid="${contingentId}"]`);
+  const detail = document.querySelector(`.cont-detail[data-cid="${contingentId}"]`);
+  const icon   = document.querySelector(`.cont-expand-icon[data-cid="${contingentId}"]`);
+  if (!wrap || !detail || !icon) return;
+  const isOpen = openContingents.has(contingentId);
+  detail.classList.toggle('open', isOpen);
+  icon.classList.toggle('open', isOpen);
+}
+window.toggleContingent = toggleContingent;
+
+function toggleAccordion(accKey) {
+  if (openAccordions.has(accKey)) {
+    openAccordions.delete(accKey);
+  } else {
+    openAccordions.add(accKey);
+  }
+  const header = document.querySelector(`.accordion-header[data-id="${accKey}"]`);
+  const body   = document.querySelector(`.accordion-body[data-id="${accKey}"]`);
+  if (!header || !body) return;
+  const isOpen = openAccordions.has(accKey);
+  header.classList.toggle('open', isOpen);
+  body.classList.toggle('open', isOpen);
+  const chevron = header.querySelector('.acc-chevron');
+  if (chevron) chevron.style.transform = isOpen ? 'rotate(180deg)' : '';
+}
+window.toggleAccordion = toggleAccordion;
+
+// ── Render accordion for a contingent ───────────────────────────
+function renderAccordion(contingentId, scores, bonusC1, bonusC2) {
+  return ASSESSMENTS.map(a => {
+    const items   = CHECKLIST_FULL[a.id] || [];
+    const sc      = scores[contingentId + '_' + a.id] || {};
+    const done    = items.filter(it => sc[it.id]).length;
+    const total   = items.length;
+    const pct     = total > 0 ? Math.round(done / total * 100) : 0;
+    const accKey  = contingentId + '__' + a.id;
+    const isOpen  = openAccordions.has(accKey);
+    const bonus   = a.id === 'c1' ? bonusC1 : a.id === 'c2' ? bonusC2 : [];
+
+    function subItemHTML(item) {
+      const checked  = !!sc[item.id];
+      const isBonus  = item.cubeId && bonus.includes(item.cubeId);
+      const colorDot = item.cubeColor
+        ? `<span class="color-dot" style="background:${item.cubeColor}"></span>`
+        : '';
+      const bonusStar = isBonus
+        ? `<span class="bonus-star"><i class="ti ti-star"></i> bonus</span>`
+        : '';
+      return `
+        <div class="sub-item ${checked ? 'checked' : ''} ${isBonus ? 'bonus' : ''}">
+          <div class="sub-checkbox ${checked ? 'checked' : ''} ${isBonus ? 'bonus-check' : ''}"></div>
+          <div class="sub-text">
+            <div class="sub-label">${colorDot}${item.label}${bonusStar}</div>
+            ${item.sub ? `<div class="sub-desc">${item.sub}</div>` : ''}
+          </div>
+        </div>`;
+    }
+
+    let bodyHTML = '';
+    if (a.id === 'c1' || a.id === 'c2') {
+      // Home out
+      bodyHTML += `<div class="v-group-label"><i class="ti ti-home-move"></i> Navigasi Awal</div>`;
+      bodyHTML += subItemHTML(items[0]);
+      // Per kubus
+      CUBES.forEach((cube, ci) => {
+        const isBonus    = bonus.includes(cube.id);
+        const cubeItems  = items.slice(1 + ci * 4, 1 + ci * 4 + 4);
+        const cubeDone   = cubeItems.filter(it => sc[it.id]).length;
+        bodyHTML += `
+          <div class="v-group-label ${isBonus ? 'bonus-group' : ''}">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${cube.color};margin-right:5px;"></span>
+            ${cube.label}
+            ${isBonus ? `<span class="bonus-star"><i class="ti ti-star"></i> Bonus</span>` : ''}
+            <span class="v-group-prog">${cubeDone}/4</span>
+          </div>`;
+        cubeItems.forEach(item => { bodyHTML += subItemHTML(item); });
+      });
+      // Home return
+      bodyHTML += `<div class="v-group-label"><i class="ti ti-home-check"></i> Navigasi Akhir</div>`;
+      bodyHTML += subItemHTML(items[items.length - 1]);
+    } else {
+      bodyHTML = items.map(subItemHTML).join('');
+    }
+
+    return `
+      <div class="accordion">
+        <div class="accordion-header ${isOpen ? 'open' : ''}" data-id="${accKey}"
+             onclick="toggleAccordion('${accKey}')">
+          <i class="ti ${a.icon} acc-icon"></i>
+          <span class="acc-label">${a.label}</span>
+          <span class="acc-badge ${badgeClass(done, total)}">${done}/${total} · ${pct}%</span>
+          <i class="ti ti-chevron-down acc-chevron" style="${isOpen ? 'transform:rotate(180deg)' : ''}"></i>
+        </div>
+        <div class="accordion-body ${isOpen ? 'open' : ''}" data-id="${accKey}">
+          ${bodyHTML}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Main Render ──────────────────────────────────────────────────
+function render(data) {
+  const main = document.getElementById('v-main');
+  if (!main) return;
+
+  document.getElementById('v-last-update').textContent = 'Update: ' + fmtTime(data?.updatedAt);
+
+  if (!data) {
+    main.innerHTML = `<div class="v-error"><i class="ti ti-database-off"></i> Belum ada data. Admin belum membuka sistem penilaian.</div>`;
+    return;
+  }
+
+  const contingents        = data.contingents        || [];
+  const scores             = data.scores             || {};
+  const bonusC1 = Array.isArray(data.bonusC1) ? data.bonusC1 : (data.bonusC1 ? [data.bonusC1] : []);
+  const bonusC2 = Array.isArray(data.bonusC2) ? data.bonusC2 : (data.bonusC2 ? [data.bonusC2] : []);
+  const activeContingentId = data.activeContingentId || null;
+  const activeC = contingents.find(c => c.id === activeContingentId) || null;
+
+  // Global metrics
+  const { done: gDone, total: gTotal } = totalGlobal(contingents, scores);
+  const gPct = gTotal > 0 ? Math.round(gDone / gTotal * 100) : 0;
+
+  // ── Focus banner ──
+  let focusHTML = '';
+  if (activeC) {
+    const overPct = overallPct(scores, activeC.id);
+    const accordion = renderAccordion(activeC.id, scores, bonusC1, bonusC2);
+
+    focusHTML = `
+      <div class="focus-banner">
+        <div class="focus-top">
+          <div class="focus-avatar" style="background:${activeC.bg};color:${activeC.tc};">${activeC.short}</div>
+          <div class="focus-info">
+            <div class="focus-label"><i class="ti ti-antenna-bars-5"></i> Sedang Dinilai</div>
+            <div class="focus-name">${activeC.name}</div>
+            <div class="focus-region">${activeC.region} · Progress ${overPct}%</div>
+            ${progressBarHTML(overPct)}
+          </div>
+        </div>
+        <div class="accordion-list">${accordion}</div>
+      </div>`;
+  } else {
+    focusHTML = `
+      <div class="no-active">
+        <i class="ti ti-eye-off"></i>
+        Tidak ada kontingen yang sedang dinilai saat ini.<br>
+        Halaman ini akan otomatis update saat admin memulai penilaian.
+      </div>`;
+  }
+
+  // ── Metric row ──
+  const metricHTML = `
+    <div class="metric-row">
+      <div class="metric-card">
+        <div class="metric-num">${gDone}<span>/${gTotal}</span></div>
+        <div class="metric-lbl">Item tercentang</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num">${contingents.length}</div>
+        <div class="metric-lbl">Kontingen</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-num accent">${gPct}%</div>
+        <div class="metric-lbl">Progress global</div>
+      </div>
+    </div>`;
+
+  // ── Contingent table ──
+  const rows = contingents.map(c => {
+    const pct        = overallPct(scores, c.id);
+    const isActive   = c.id === activeContingentId;
+    const isExpanded = openContingents.has(c.id);
+    const pills      = ASSESSMENTS.map(a => {
+      const p = getProgress(scores, c.id, a.id);
+      return `<span class="a-pill ${pillClass(p.done, p.total)}"><i class="ti ${a.icon}"></i>${p.done}/${p.total}</span>`;
+    }).join('');
+
+    const accordion = renderAccordion(c.id, scores, bonusC1, bonusC2);
+
+    return `
+      <div class="cont-wrap ${isActive ? 'active-wrap' : ''}" data-cid="${c.id}">
+        <div class="cont-row ${isActive ? 'active-row' : ''}" onclick="toggleContingent('${c.id}')">
+          <div class="cont-avatar" style="background:${c.bg};color:${c.tc};">${c.short}</div>
+          <div class="cont-info">
+            <div class="cont-name">${c.name}${isActive ? ' <span style="font-size:11px;color:var(--accent);">◀ aktif</span>' : ''}</div>
+            <div class="cont-region">${c.region}</div>
+            <div class="cont-pills">${pills}</div>
+            ${progressBarHTML(pct)}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+            <div class="cont-pct">${pct}%</div>
+            <div class="cont-pct-sub">selesai</div>
+            <i class="ti ti-chevron-down cont-expand-icon ${isExpanded ? 'open' : ''}" data-cid="${c.id}"></i>
+          </div>
+        </div>
+        <div class="cont-detail ${isExpanded ? 'open' : ''}" data-cid="${c.id}">
+          <div class="accordion-list">${accordion}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const tableHTML = contingents.length === 0
+    ? `<div style="color:var(--t3);font-size:13px;padding:20px 0;">Belum ada kontingen terdaftar.</div>`
+    : `<div class="cont-table">${rows}</div>`;
+
+  main.innerHTML = `
+    <div class="sec-label" style="margin-bottom:10px;">Kontingen Aktif</div>
+    ${focusHTML}
+    ${metricHTML}
+    <div class="sec-label">Semua Kontingen</div>
+    ${tableHTML}`;
+}
+
+// ── Subscribe ────────────────────────────────────────────────────
+subscribeState(data => render(data));
+
+// ── Chat (Viewer) ────────────────────────────────────────────────
+
+let viewerName = null; // null = belum set / tidak mau chat
+let chatOpen   = false;
+let chatUnseen = 0;
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Show name prompt after short delay
+setTimeout(() => {
+  document.getElementById('name-modal').style.display = 'flex';
+  setTimeout(() => {
+    const inp = document.getElementById('name-input');
+    if (inp) {
+      inp.focus();
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') confirmName(); });
+    }
+  }, 80);
+}, 800);
+
+function confirmName() {
+  const inp = document.getElementById('name-input');
+  const name = inp ? inp.value.trim() : '';
+  if (!name) {
+    if (inp) { inp.classList.add('err'); setTimeout(() => inp.classList.remove('err'), 600); }
+    return;
+  }
+  viewerName = name;
+  startChatMode();
+}
+window.confirmName = confirmName;
+
+function skipChat() {
+  viewerName = null;
+  document.getElementById('name-modal').style.display = 'none';
+  // Still show FAB (read-only)
+  document.getElementById('chat-fab').style.display = 'block';
+  initChatSubscription();
+}
+window.skipChat = skipChat;
+
+function startChatMode() {
+  document.getElementById('name-modal').style.display = 'none';
+  // Enable input
+  const inp = document.getElementById('chat-input');
+  const btn = document.getElementById('chat-send-btn');
+  if (inp) { inp.disabled = false; inp.placeholder = `Pesan sebagai ${viewerName}...`; }
+  if (btn) btn.disabled = false;
+  document.getElementById('chat-fab').style.display = 'block';
+  initChatSubscription();
+}
+
+function initChatSubscription() {
+  subscribeChat(msgs => {
+    renderChatMsgs(msgs);
+    if (!chatOpen && msgs.length > 0) {
+      chatUnseen = msgs.length;
+      const badge = document.getElementById('chat-fab-badge');
+      if (badge) badge.style.display = 'flex';
+    }
+  });
+}
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const panel = document.getElementById('chat-panel');
+  if (panel) panel.classList.toggle('open', chatOpen);
+  if (chatOpen) {
+    const badge = document.getElementById('chat-fab-badge');
+    if (badge) badge.style.display = 'none';
+    chatUnseen = 0;
+    setTimeout(() => {
+      const inp = document.getElementById('chat-input');
+      if (inp && !inp.disabled) inp.focus();
+      const msgs = document.getElementById('chat-messages');
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }, 80);
+  }
+}
+window.toggleChat = toggleChat;
+
+function renderChatMsgs(msgs) {
+  const container = document.getElementById('chat-messages');
+  if (!container) return;
+  if (!msgs || msgs.length === 0) {
+    container.innerHTML = '<div class="chat-empty">Belum ada pesan. Mulai chat!</div>';
+    return;
+  }
+  const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 40;
+  container.innerHTML = msgs.map(msg => {
+    const isAdminMsg = msg.isAdmin;
+    const isMe = viewerName && msg.sender === viewerName && !msg.isAdmin;
+    const time = new Date(msg.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    const cls = isMe ? 'chat-msg-me' : (isAdminMsg ? 'chat-msg-other' : 'chat-msg-other');
+    return `
+      <div class="chat-msg ${cls}">
+        <div class="chat-msg-sender ${isAdminMsg ? 'sender-admin' : ''}">
+          ${isAdminMsg ? '<i class="ti ti-shield-check" style="font-size:10px;"></i> ' : ''}${escapeHtml(msg.sender)}
+          <span class="chat-msg-time">${time}</span>
+        </div>
+        <div class="chat-msg-text">${escapeHtml(msg.text)}</div>
+      </div>`;
+  }).join('');
+  if (wasAtBottom) container.scrollTop = container.scrollHeight;
+}
+
+async function sendViewerChat() {
+  if (!viewerName) return; // readonly mode
+  const inp = document.getElementById('chat-input');
+  if (!inp) return;
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  try {
+    await sendChatMessage(viewerName, text, false);
+  } catch(e) {
+    console.error('Chat send failed:', e);
+    inp.value = text;
+  }
+}
+window.sendViewerChat = sendViewerChat;
+</script>
+</body>
+</html>
