@@ -136,49 +136,72 @@ export function subscribeStreamConfig(callback) {
   return () => off(r);
 }
 
-/** WebRTC signaling — write offer (from admin/broadcaster) */
-export async function setOffer(sdp) {
-  await set(ref(db, 'lks2026_stream/signal/offer'), { sdp, ts: Date.now() });
-  // Clear old answers & candidates when new offer is created
-  await set(ref(db, 'lks2026_stream/signal/answers'), null);
-  await set(ref(db, 'lks2026_stream/signal/iceCandidates'), null);
+/**
+ * Alur signaling yang benar (per-viewer):
+ * 1. Viewer tulis request ke lks2026_stream/signal/requests/{viewerId}
+ * 2. Admin dengar requests → buat PC → createOffer → tulis ke lks2026_stream/signal/offers/{viewerId}
+ * 3. Viewer baca offer miliknya → createAnswer → tulis ke lks2026_stream/signal/answers/{viewerId}
+ * 4. Admin baca answer → setRemoteDescription
+ * 5. Kedua sisi saling kirim ICE candidates
+ */
+
+/** Viewer: daftarkan diri untuk minta offer dari admin */
+export async function requestOffer(viewerId) {
+  await set(ref(db, `lks2026_stream/signal/requests/${viewerId}`), { ts: Date.now() });
 }
 
-/** WebRTC signaling — write answer (from viewer) */
-export async function pushAnswer(viewerId, sdp) {
+/** Admin: tulis offer untuk viewer tertentu */
+export async function writeOfferForViewer(viewerId, sdp) {
+  await set(ref(db, `lks2026_stream/signal/offers/${viewerId}`), { sdp, ts: Date.now() });
+}
+
+/** Viewer: tulis answer untuk admin */
+export async function writeAnswer(viewerId, sdp) {
   await set(ref(db, `lks2026_stream/signal/answers/${viewerId}`), { sdp, ts: Date.now() });
 }
 
-/** WebRTC signaling — push ICE candidate */
-export async function pushIceCandidate(role, viewerId, candidate) {
-  const path = role === 'admin'
-    ? `lks2026_stream/signal/iceCandidates/admin/${viewerId}`
-    : `lks2026_stream/signal/iceCandidates/viewers/${viewerId}`;
-  await push(ref(db, path), { candidate, ts: Date.now() });
-}
-
-/** Subscribe to offer (viewer listens) */
-export function subscribeOffer(callback) {
-  const r = ref(db, 'lks2026_stream/signal/offer');
-  onValue(r, snap => callback(snap.exists() ? snap.val() : null));
-  return () => off(r);
-}
-
-/** Subscribe to answers (admin listens, per viewer) */
-export function subscribeAnswers(callback) {
-  const r = ref(db, 'lks2026_stream/signal/answers');
+/** Admin: dengar requests masuk dari viewer */
+export function subscribeRequests(callback) {
+  const r = ref(db, 'lks2026_stream/signal/requests');
   onValue(r, snap => callback(snap.exists() ? snap.val() : {}));
   return () => off(r);
 }
 
-/** Subscribe to ICE candidates */
+/** Viewer: dengar offer dari admin untuk dirinya */
+export function subscribeMyOffer(viewerId, callback) {
+  const r = ref(db, `lks2026_stream/signal/offers/${viewerId}`);
+  onValue(r, snap => callback(snap.exists() ? snap.val() : null));
+  return () => off(r);
+}
+
+/** Admin: dengar answer dari viewer tertentu */
+export function subscribeAnswer(viewerId, callback) {
+  const r = ref(db, `lks2026_stream/signal/answers/${viewerId}`);
+  onValue(r, snap => callback(snap.exists() ? snap.val() : null));
+  return () => off(r);
+}
+
+/** Push ICE candidate */
+export async function pushIceCandidate(role, viewerId, candidate) {
+  const path = role === 'admin'
+    ? `lks2026_stream/signal/ice/toViewer/${viewerId}`
+    : `lks2026_stream/signal/ice/toAdmin/${viewerId}`;
+  await push(ref(db, path), { candidate, ts: Date.now() });
+}
+
+/** Subscribe ICE candidates */
 export function subscribeIceCandidates(role, viewerId, callback) {
   const path = role === 'viewer'
-    ? `lks2026_stream/signal/iceCandidates/admin/${viewerId}`
-    : `lks2026_stream/signal/iceCandidates/viewers/${viewerId}`;
+    ? `lks2026_stream/signal/ice/toViewer/${viewerId}`
+    : `lks2026_stream/signal/ice/toAdmin/${viewerId}`;
   const r = ref(db, path);
   onValue(r, snap => callback(snap.exists() ? Object.values(snap.val()) : []));
   return () => off(r);
+}
+
+/** Bersihkan semua signaling data (dipanggil saat stream berhenti) */
+export async function clearSignaling() {
+  await set(ref(db, 'lks2026_stream/signal'), null);
 }
 
 export { db };
