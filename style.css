@@ -1373,3 +1373,9 @@ html, body {
   from { opacity: 0; transform: translateX(-50%) translateY(8px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+/* ── Stream panel (admin config) ── */
+.stream-mode-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
