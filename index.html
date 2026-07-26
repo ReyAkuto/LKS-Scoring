@@ -958,6 +958,15 @@ function render(data) {
     ${tableHTML}`;
 }
 
+// ── Helpers (harus didefinisikan sebelum stream logic) ───────────
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // ── Stream Viewer ────────────────────────────────────────────────
 
 const RTC_CONFIG = {
@@ -1071,18 +1080,18 @@ async function startViewerRTC() {
   });
 }
 
-// Subscribe to stream config changes
+// Subscribe to stream config changes — always render on first call too
 subscribeStreamConfig(cfg => {
   const newMode = cfg?.mode || 'off';
-  if (newMode !== currentStreamMode) {
-    currentStreamMode = newMode;
-    // Close old WebRTC if switching away from camera
-    if (newMode !== 'camera' && rtcPeer) {
-      rtcPeer.close();
-      rtcPeer = null;
-    }
-    renderStreamSection(cfg);
+  const modeChanged = newMode !== currentStreamMode;
+  currentStreamMode = newMode;
+  // Close old WebRTC if switching away from camera
+  if (newMode !== 'camera' && rtcPeer) {
+    rtcPeer.close();
+    rtcPeer = null;
   }
+  // Always render (handles page load with stream already active)
+  renderStreamSection(cfg);
 });
 
 // ── Subscribe ────────────────────────────────────────────────────
@@ -1093,14 +1102,6 @@ subscribeState(data => render(data));
 let viewerName = null; // null = belum set / tidak mau chat
 let chatOpen   = false;
 let chatUnseen = 0;
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 // Show name prompt after short delay
 setTimeout(() => {
