@@ -13,11 +13,12 @@ import {
   subscribeChat,
   setStreamConfig,
   subscribeStreamConfig,
-  setOffer,
-  pushAnswer,
+  writeOfferForViewer,
+  subscribeRequests,
+  subscribeAnswer,
   pushIceCandidate,
-  subscribeAnswers,
   subscribeIceCandidates,
+  clearSignaling,
 } from './firebase.js';
 
 // ── Data Definitions ──────────────────────────────────────────────
@@ -199,7 +200,7 @@ const stream = {
   localStream: null,     // MediaStream (camera mode)
   peers: {},             // viewerId -> RTCPeerConnection
   unsubConfig: null,
-  unsubAnswers: null,
+  unsubRequests: null,
 };
 
 // ── Persistence (Firebase + localStorage fallback) ─────────────────
@@ -1103,20 +1104,21 @@ async function startCameraStream() {
     if (vid) { vid.srcObject = ms; }
     if (overlay) overlay.style.display = 'none';
 
-    // Listen for viewer answers to create peer connections
-    if (stream.unsubAnswers) stream.unsubAnswers();
-    stream.unsubAnswers = subscribeAnswers(async (answers) => {
-      for (const [viewerId, answerData] of Object.entries(answers || {})) {
-        if (stream.peers[viewerId]) continue; // already connected
-        await createPeerForViewer(viewerId, answerData.sdp);
+    // Bersihkan signaling lama
+    await clearSignaling();
+
+    // Dengar request dari viewer — tiap viewer baru langsung buatkan peer connection
+    if (stream.unsubRequests) stream.unsubRequests();
+    stream.unsubRequests = subscribeRequests(async (requests) => {
+      for (const viewerId of Object.keys(requests || {})) {
+        if (stream.peers[viewerId]) continue; // sudah ada peer untuk viewer ini
+        await createPeerForViewer(viewerId);
       }
-      const count = Object.keys(answers || {}).length;
+      const count = Object.keys(requests || {}).length;
       const el = document.getElementById('stream-peer-count');
       if (el) el.textContent = `Viewer terhubung: ${count}`;
     });
 
-    // Broadcast offer so viewers can initiate connection
-    await broadcastOffer();
   } catch (e) {
     const overlay = document.getElementById('stream-preview-overlay');
     if (overlay) overlay.innerHTML = `<i class="ti ti-alert-circle" style="margin-right:6px;color:#f87171;"></i> Kamera tidak bisa diakses`;
@@ -1124,41 +1126,44 @@ async function startCameraStream() {
   }
 }
 
-async function broadcastOffer() {
-  // Create a "template" offer — viewers will use this to build an answer
-  const pc = new RTCPeerConnection(RTC_CONFIG);
-  if (stream.localStream) {
-    stream.localStream.getTracks().forEach(t => pc.addTrack(t, stream.localStream));
-  }
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await setOffer(offer.sdp);
-  pc.close(); // This was just for generating the offer SDP
-}
-
-async function createPeerForViewer(viewerId, answerSdp) {
+async function createPeerForViewer(viewerId) {
   const pc = new RTCPeerConnection(RTC_CONFIG);
   stream.peers[viewerId] = pc;
 
+  // Tambahkan tracks lokal ke PC ini
   if (stream.localStream) {
     stream.localStream.getTracks().forEach(t => pc.addTrack(t, stream.localStream));
   }
 
-  // Re-create offer SDP we sent
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-
-  // Send ICE candidates to this viewer
+  // Kirim ICE candidates ke viewer ini
   pc.onicecandidate = async (e) => {
     if (e.candidate) {
       await pushIceCandidate('admin', viewerId, JSON.stringify(e.candidate));
     }
   };
 
-  // Receive ICE candidates from viewer
+  // Buat offer dan kirim ke viewer
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await writeOfferForViewer(viewerId, offer.sdp);
+
+  // Tunggu answer dari viewer ini
+  subscribeAnswer(viewerId, async (answerData) => {
+    if (!answerData || !answerData.sdp) return;
+    if (pc.signalingState === 'have-local-offer') {
+      try {
+        await pc.setRemoteDescription({ type: 'answer', sdp: answerData.sdp });
+      } catch(e) { console.warn('[Stream] setRemoteDescription failed:', e); }
+    }
+  });
+
+  // Terima ICE candidates dari viewer
+  const seenIce = new Set();
   subscribeIceCandidates('admin', viewerId, async (candidates) => {
     for (const c of candidates) {
+      const key = c.candidate;
+      if (seenIce.has(key)) continue;
+      seenIce.add(key);
       try { await pc.addIceCandidate(JSON.parse(c.candidate)); } catch(_) {}
     }
   });
@@ -1171,7 +1176,8 @@ function stopCameraStream() {
   }
   Object.values(stream.peers).forEach(pc => pc.close());
   stream.peers = {};
-  if (stream.unsubAnswers) { stream.unsubAnswers(); stream.unsubAnswers = null; }
+  if (stream.unsubRequests) { stream.unsubRequests(); stream.unsubRequests = null; }
+  clearSignaling().catch(() => {});
 }
 
 async function handleLogin() {
