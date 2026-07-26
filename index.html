@@ -622,7 +622,8 @@
 <script type="module">
 import {
   subscribeState, subscribeChat, sendChatMessage,
-  subscribeStreamConfig, subscribeOffer, pushAnswer, pushIceCandidate, subscribeIceCandidates,
+  subscribeStreamConfig, requestOffer, subscribeMyOffer, writeAnswer,
+  pushIceCandidate, subscribeIceCandidates,
 } from './firebase.js';
 
 // ── Data definitions (mirror of app.js) ─────────────────────────
@@ -1039,44 +1040,57 @@ function renderStreamSection(cfg) {
 }
 
 async function startViewerRTC() {
-  // Listen for the offer from admin
-  subscribeOffer(async (offerData) => {
-    if (!offerData || !offerData.sdp) return;
+  // Close existing peer if any
+  if (rtcPeer) { rtcPeer.close(); rtcPeer = null; }
 
-    // Close existing peer if any
-    if (rtcPeer) { rtcPeer.close(); rtcPeer = null; }
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  rtcPeer = pc;
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-    rtcPeer = pc;
+  // Saat menerima track dari admin, tampilkan di video
+  pc.ontrack = (event) => {
+    const vid = document.getElementById('viewer-stream-video');
+    const overlay = document.getElementById('stream-connecting-overlay');
+    if (vid && event.streams[0]) {
+      vid.srcObject = event.streams[0];
+      if (overlay) overlay.style.display = 'none';
+    }
+  };
 
-    // When we get the remote stream, attach to video
-    pc.ontrack = (event) => {
-      const vid = document.getElementById('viewer-stream-video');
-      const overlay = document.getElementById('stream-connecting-overlay');
-      if (vid && event.streams[0]) {
-        vid.srcObject = event.streams[0];
-        if (overlay) overlay.style.display = 'none';
-      }
-    };
+  // Kirim ICE candidates ke admin
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      await pushIceCandidate('viewer', VIEWER_ID, JSON.stringify(e.candidate));
+    }
+  };
 
-    // Send our ICE candidates to admin
-    pc.onicecandidate = async (e) => {
-      if (e.candidate) {
-        await pushIceCandidate('viewer', VIEWER_ID, JSON.stringify(e.candidate));
-      }
-    };
+  // Daftarkan diri ke admin — minta dibuatkan offer
+  await requestOffer(VIEWER_ID);
 
-    await pc.setRemoteDescription({ type: 'offer', sdp: offerData.sdp });
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await pushAnswer(VIEWER_ID, answer.sdp);
+  // Dengar offer yang dibuat admin khusus untuk viewer ini
+  const seenIce = new Set();
+  let offerProcessed = false;
+  subscribeMyOffer(VIEWER_ID, async (offerData) => {
+    if (!offerData || !offerData.sdp || offerProcessed) return;
+    offerProcessed = true;
 
-    // Receive ICE candidates from admin
-    subscribeIceCandidates('viewer', VIEWER_ID, async (candidates) => {
-      for (const c of candidates) {
-        try { await pc.addIceCandidate(JSON.parse(c.candidate)); } catch(_) {}
-      }
-    });
+    try {
+      await pc.setRemoteDescription({ type: 'offer', sdp: offerData.sdp });
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await writeAnswer(VIEWER_ID, answer.sdp);
+
+      // Mulai terima ICE candidates dari admin
+      subscribeIceCandidates('viewer', VIEWER_ID, async (candidates) => {
+        for (const c of candidates) {
+          const key = c.candidate;
+          if (seenIce.has(key)) continue;
+          seenIce.add(key);
+          try { await pc.addIceCandidate(JSON.parse(c.candidate)); } catch(_) {}
+        }
+      });
+    } catch(e) {
+      console.error('[Viewer RTC] error:', e);
+    }
   });
 }
 
