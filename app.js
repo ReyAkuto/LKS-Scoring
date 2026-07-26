@@ -11,6 +11,13 @@ import {
   setAdminPassword,
   sendChatMessage,
   subscribeChat,
+  setStreamConfig,
+  subscribeStreamConfig,
+  setOffer,
+  pushAnswer,
+  pushIceCandidate,
+  subscribeAnswers,
+  subscribeIceCandidates,
 } from './firebase.js';
 
 // ── Data Definitions ──────────────────────────────────────────────
@@ -182,6 +189,17 @@ const chat = {
   open:     false,
   messages: [],
   unsubscribe: null,
+};
+
+// ── Stream State ────────────────────────────────────────────────────
+
+const stream = {
+  mode: 'off',           // 'off' | 'camera' | 'link'
+  url: '',               // YouTube/external URL (link mode)
+  localStream: null,     // MediaStream (camera mode)
+  peers: {},             // viewerId -> RTCPeerConnection
+  unsubConfig: null,
+  unsubAnswers: null,
 };
 
 // ── Persistence (Firebase + localStorage fallback) ─────────────────
@@ -636,6 +654,45 @@ function renderConfigPanel() {
         </button>
       </div>
       <div id="pw-change-msg" class="pw-change-msg" style="display:none;"></div>
+
+      <div class="config-sub" style="margin-top:20px;">
+        <i class="ti ti-video" aria-hidden="true"></i> Live Stream
+      </div>
+      <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px;">
+        Pilih mode streaming untuk viewer. Mode Kamera menggunakan kamera perangkat ini langsung (WebRTC). Mode Link embed URL YouTube Live atau platform lain.
+      </div>
+      <div class="stream-mode-row">
+        <button class="btn ${stream.mode === 'off' ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="setStreamMode('off')">
+          <i class="ti ti-video-off"></i> Nonaktif
+        </button>
+        <button class="btn ${stream.mode === 'camera' ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="setStreamMode('camera')">
+          <i class="ti ti-camera"></i> Kamera
+        </button>
+        <button class="btn ${stream.mode === 'link' ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="setStreamMode('link')">
+          <i class="ti ti-link"></i> Link URL
+        </button>
+      </div>
+      <div id="stream-link-row" style="display:${stream.mode === 'link' ? 'flex' : 'none'};gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input id="stream-url-input" class="text-input" type="url"
+               placeholder="https://youtube.com/embed/..."
+               value="${escapeHtml(stream.url)}"
+               style="flex:1;min-width:200px;" />
+        <button class="btn btn-ghost btn-sm" onclick="saveStreamUrl()">
+          <i class="ti ti-check"></i> Simpan URL
+        </button>
+      </div>
+      <div id="stream-camera-status" style="display:${stream.mode === 'camera' ? 'block' : 'none'};margin-top:10px;">
+        <div id="stream-preview-wrap" style="position:relative;background:#000;border-radius:6px;overflow:hidden;max-width:320px;">
+          <video id="stream-preview" autoplay muted playsinline
+                 style="width:100%;max-height:180px;display:block;"></video>
+          <div id="stream-preview-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;background:rgba(0,0,0,0.55);">
+            <i class="ti ti-loader-2 spin" style="margin-right:6px;"></i> Memulai kamera...
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--color-text-muted);margin-top:6px;" id="stream-peer-count">
+          Viewer terhubung: 0
+        </div>
+      </div>
     </div>`;
 }
 
@@ -1001,6 +1058,122 @@ function showLoginOverlay() {
   }, 50);
 }
 
+// ── Stream Logic (Admin/Broadcaster) ──────────────────────────────
+
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ],
+};
+
+async function setStreamMode(mode) {
+  // Stop previous camera if switching away
+  if (stream.mode === 'camera' && mode !== 'camera') {
+    stopCameraStream();
+  }
+  stream.mode = mode;
+  await setStreamConfig({ mode, url: stream.url });
+  render();
+
+  if (mode === 'camera') {
+    // Start camera after render (so DOM elements exist)
+    setTimeout(() => startCameraStream(), 100);
+  }
+}
+window.setStreamMode = setStreamMode;
+
+async function saveStreamUrl() {
+  const inp = document.getElementById('stream-url-input');
+  if (!inp) return;
+  stream.url = inp.value.trim();
+  await setStreamConfig({ mode: 'link', url: stream.url });
+  // Flash feedback
+  inp.style.borderColor = 'var(--color-success)';
+  setTimeout(() => { inp.style.borderColor = ''; }, 1200);
+}
+window.saveStreamUrl = saveStreamUrl;
+
+async function startCameraStream() {
+  try {
+    const ms = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    stream.localStream = ms;
+    const vid = document.getElementById('stream-preview');
+    const overlay = document.getElementById('stream-preview-overlay');
+    if (vid) { vid.srcObject = ms; }
+    if (overlay) overlay.style.display = 'none';
+
+    // Listen for viewer answers to create peer connections
+    if (stream.unsubAnswers) stream.unsubAnswers();
+    stream.unsubAnswers = subscribeAnswers(async (answers) => {
+      for (const [viewerId, answerData] of Object.entries(answers || {})) {
+        if (stream.peers[viewerId]) continue; // already connected
+        await createPeerForViewer(viewerId, answerData.sdp);
+      }
+      const count = Object.keys(answers || {}).length;
+      const el = document.getElementById('stream-peer-count');
+      if (el) el.textContent = `Viewer terhubung: ${count}`;
+    });
+
+    // Broadcast offer so viewers can initiate connection
+    await broadcastOffer();
+  } catch (e) {
+    const overlay = document.getElementById('stream-preview-overlay');
+    if (overlay) overlay.innerHTML = `<i class="ti ti-alert-circle" style="margin-right:6px;color:#f87171;"></i> Kamera tidak bisa diakses`;
+    console.error('[Stream] getUserMedia error:', e);
+  }
+}
+
+async function broadcastOffer() {
+  // Create a "template" offer — viewers will use this to build an answer
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  if (stream.localStream) {
+    stream.localStream.getTracks().forEach(t => pc.addTrack(t, stream.localStream));
+  }
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await setOffer(offer.sdp);
+  pc.close(); // This was just for generating the offer SDP
+}
+
+async function createPeerForViewer(viewerId, answerSdp) {
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  stream.peers[viewerId] = pc;
+
+  if (stream.localStream) {
+    stream.localStream.getTracks().forEach(t => pc.addTrack(t, stream.localStream));
+  }
+
+  // Re-create offer SDP we sent
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+  // Send ICE candidates to this viewer
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      await pushIceCandidate('admin', viewerId, JSON.stringify(e.candidate));
+    }
+  };
+
+  // Receive ICE candidates from viewer
+  subscribeIceCandidates('admin', viewerId, async (candidates) => {
+    for (const c of candidates) {
+      try { await pc.addIceCandidate(JSON.parse(c.candidate)); } catch(_) {}
+    }
+  });
+}
+
+function stopCameraStream() {
+  if (stream.localStream) {
+    stream.localStream.getTracks().forEach(t => t.stop());
+    stream.localStream = null;
+  }
+  Object.values(stream.peers).forEach(pc => pc.close());
+  stream.peers = {};
+  if (stream.unsubAnswers) { stream.unsubAnswers(); stream.unsubAnswers = null; }
+}
+
 async function handleLogin() {
   const inp = document.getElementById('login-pw-input');
   if (!inp) return;
@@ -1052,6 +1225,15 @@ async function handleLogin() {
 
   // Start chat subscription
   initChat();
+
+  // Restore stream config from Firebase
+  if (stream.unsubConfig) stream.unsubConfig();
+  stream.unsubConfig = subscribeStreamConfig(cfg => {
+    if (!cfg) return;
+    stream.mode = cfg.mode || 'off';
+    stream.url  = cfg.url  || '';
+    // If camera was already active and we re-render, no need to restart
+  });
 }
 window.handleLogin = handleLogin;
 
