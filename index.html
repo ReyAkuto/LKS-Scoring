@@ -505,6 +505,54 @@
     }
     .chat-send-btn:hover { opacity: 0.85; }
     .chat-send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── Stream section ── */
+    .stream-section {
+      margin-bottom: 20px;
+      border-radius: var(--r-lg);
+      overflow: hidden;
+      border: 1px solid var(--border-s);
+      background: var(--s1);
+    }
+    .stream-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px;
+      background: var(--s2);
+      font-size: 11px; font-weight: 600;
+      color: var(--t2); letter-spacing: 0.05em; text-transform: uppercase;
+    }
+    .stream-live-badge {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: 700; color: var(--danger);
+      letter-spacing: 0.08em;
+      margin-left: auto;
+    }
+    .stream-live-badge .dot { background: var(--danger); }
+    .stream-body { padding: 12px; }
+    .stream-video-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #000;
+      border-radius: var(--r-md);
+      overflow: hidden;
+    }
+    .stream-video-wrap video,
+    .stream-video-wrap iframe {
+      width: 100%; height: 100%;
+      border: none; display: block;
+    }
+    .stream-placeholder {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 8px;
+      padding: 28px; color: var(--t3); font-size: 12px; text-align: center;
+    }
+    .stream-placeholder i { font-size: 28px; opacity: 0.3; }
+    .stream-connecting {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; background: rgba(0,0,0,0.7); color: var(--t2); font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -545,8 +593,7 @@
 <div id="chat-panel">
   <div class="chat-header">
     <i class="ti ti-message-circle" style="color:var(--accent);font-size:15px;"></i>
-    <span class="chat-header-title">Chat Realtime <span id="chat-viewer-name" style="font-size:10px;color:var(--t3);font-weight:400;"></span></span>
-    <button class="chat-close-btn" onclick="changeViewerName()" title="Ganti nama" style="margin-right:2px;"><i class="ti ti-pencil"></i></button>
+    <span class="chat-header-title">Chat Realtime</span>
     <button class="chat-close-btn" onclick="toggleChat()"><i class="ti ti-x"></i></button>
   </div>
   <div class="chat-messages" id="chat-messages">
@@ -562,6 +609,9 @@
   </div>
 </div>
 
+<!-- Stream display (injected by JS) -->
+<div id="stream-container"></div>
+
 <main class="v-page" id="v-main">
   <div class="v-loading">
     <i class="ti ti-loader-2 spin"></i>
@@ -570,7 +620,10 @@
 </main>
 
 <script type="module">
-import { subscribeState, subscribeChat, sendChatMessage } from './firebase.js';
+import {
+  subscribeState, subscribeChat, sendChatMessage,
+  subscribeStreamConfig, subscribeOffer, pushAnswer, pushIceCandidate, subscribeIceCandidates,
+} from './firebase.js';
 
 // ── Data definitions (mirror of app.js) ─────────────────────────
 const CUBES = [
@@ -905,6 +958,133 @@ function render(data) {
     ${tableHTML}`;
 }
 
+// ── Stream Viewer ────────────────────────────────────────────────
+
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ],
+};
+
+// Stable viewer ID for this session
+const VIEWER_ID = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+
+let currentStreamMode = 'off';
+let rtcPeer = null;
+
+function renderStreamSection(cfg) {
+  const container = document.getElementById('stream-container');
+  if (!container) return;
+
+  if (!cfg || cfg.mode === 'off') {
+    container.innerHTML = '';
+    return;
+  }
+
+  if (cfg.mode === 'link') {
+    const src = cfg.url || '';
+    container.innerHTML = `
+      <div class="v-page" style="padding-bottom:0;padding-top:20px;">
+        <div class="stream-section">
+          <div class="stream-header">
+            <i class="ti ti-video"></i> Live Stream
+            <span class="stream-live-badge"><span class="dot"></span> LIVE</span>
+          </div>
+          <div class="stream-body">
+            ${src
+              ? `<div class="stream-video-wrap">
+                   <iframe src="${escapeHtml(src)}" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+                 </div>`
+              : `<div class="stream-placeholder"><i class="ti ti-link-off"></i>URL stream belum dikonfigurasi oleh admin.</div>`
+            }
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (cfg.mode === 'camera') {
+    container.innerHTML = `
+      <div class="v-page" style="padding-bottom:0;padding-top:20px;">
+        <div class="stream-section">
+          <div class="stream-header">
+            <i class="ti ti-camera"></i> Live Kamera
+            <span class="stream-live-badge"><span class="dot"></span> LIVE</span>
+          </div>
+          <div class="stream-body">
+            <div class="stream-video-wrap">
+              <video id="viewer-stream-video" autoplay playsinline
+                     style="width:100%;height:100%;display:block;background:#000;"></video>
+              <div class="stream-connecting" id="stream-connecting-overlay">
+                <i class="ti ti-loader-2 spin" style="font-size:22px;color:var(--accent);"></i>
+                <span>Menghubungkan ke kamera admin...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    startViewerRTC();
+    return;
+  }
+}
+
+async function startViewerRTC() {
+  // Listen for the offer from admin
+  subscribeOffer(async (offerData) => {
+    if (!offerData || !offerData.sdp) return;
+
+    // Close existing peer if any
+    if (rtcPeer) { rtcPeer.close(); rtcPeer = null; }
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    rtcPeer = pc;
+
+    // When we get the remote stream, attach to video
+    pc.ontrack = (event) => {
+      const vid = document.getElementById('viewer-stream-video');
+      const overlay = document.getElementById('stream-connecting-overlay');
+      if (vid && event.streams[0]) {
+        vid.srcObject = event.streams[0];
+        if (overlay) overlay.style.display = 'none';
+      }
+    };
+
+    // Send our ICE candidates to admin
+    pc.onicecandidate = async (e) => {
+      if (e.candidate) {
+        await pushIceCandidate('viewer', VIEWER_ID, JSON.stringify(e.candidate));
+      }
+    };
+
+    await pc.setRemoteDescription({ type: 'offer', sdp: offerData.sdp });
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await pushAnswer(VIEWER_ID, answer.sdp);
+
+    // Receive ICE candidates from admin
+    subscribeIceCandidates('viewer', VIEWER_ID, async (candidates) => {
+      for (const c of candidates) {
+        try { await pc.addIceCandidate(JSON.parse(c.candidate)); } catch(_) {}
+      }
+    });
+  });
+}
+
+// Subscribe to stream config changes
+subscribeStreamConfig(cfg => {
+  const newMode = cfg?.mode || 'off';
+  if (newMode !== currentStreamMode) {
+    currentStreamMode = newMode;
+    // Close old WebRTC if switching away from camera
+    if (newMode !== 'camera' && rtcPeer) {
+      rtcPeer.close();
+      rtcPeer = null;
+    }
+    renderStreamSection(cfg);
+  }
+});
+
 // ── Subscribe ────────────────────────────────────────────────────
 subscribeState(data => render(data));
 
@@ -922,32 +1102,16 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-// ── Nama tersimpan di localStorage ──────────────────────────────
-const STORAGE_KEY = 'lks2026_viewer_name';
-
-function loadSavedName() {
-  try { return localStorage.getItem(STORAGE_KEY) || null; } catch { return null; }
-}
-function saveName(name) {
-  try { if (name) localStorage.setItem(STORAGE_KEY, name); else localStorage.removeItem(STORAGE_KEY); } catch {}
-}
-
-// Init: cek apakah sudah ada nama tersimpan
+// Show name prompt after short delay
 setTimeout(() => {
-  const saved = loadSavedName();
-  if (saved) {
-    viewerName = saved;
-    startChatMode();          // langsung masuk mode chat, modal tidak muncul
-  } else {
-    document.getElementById('name-modal').style.display = 'flex';
-    setTimeout(() => {
-      const inp = document.getElementById('name-input');
-      if (inp) {
-        inp.focus();
-        inp.addEventListener('keydown', e => { if (e.key === 'Enter') confirmName(); });
-      }
-    }, 80);
-  }
+  document.getElementById('name-modal').style.display = 'flex';
+  setTimeout(() => {
+    const inp = document.getElementById('name-input');
+    if (inp) {
+      inp.focus();
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') confirmName(); });
+    }
+  }, 80);
 }, 800);
 
 function confirmName() {
@@ -958,33 +1122,18 @@ function confirmName() {
     return;
   }
   viewerName = name;
-  saveName(name);
   startChatMode();
 }
 window.confirmName = confirmName;
 
 function skipChat() {
   viewerName = null;
-  saveName(null);
   document.getElementById('name-modal').style.display = 'none';
   // Still show FAB (read-only)
   document.getElementById('chat-fab').style.display = 'block';
-  if (!window._chatSubscribed) {
-    window._chatSubscribed = true;
-    initChatSubscription();
-  }
+  initChatSubscription();
 }
 window.skipChat = skipChat;
-
-/** Ganti nama — tampilkan modal lagi dengan nama lama terisi */
-function changeViewerName() {
-  const modal = document.getElementById('name-modal');
-  const inp   = document.getElementById('name-input');
-  if (inp && viewerName) inp.value = viewerName;
-  if (modal) modal.style.display = 'flex';
-  setTimeout(() => { if (inp) inp.focus(); }, 80);
-}
-window.changeViewerName = changeViewerName;
 
 function startChatMode() {
   document.getElementById('name-modal').style.display = 'none';
@@ -993,15 +1142,8 @@ function startChatMode() {
   const btn = document.getElementById('chat-send-btn');
   if (inp) { inp.disabled = false; inp.placeholder = `Pesan sebagai ${viewerName}...`; }
   if (btn) btn.disabled = false;
-  // Tampilkan nama di header chat
-  const nameTag = document.getElementById('chat-viewer-name');
-  if (nameTag) nameTag.textContent = viewerName;
   document.getElementById('chat-fab').style.display = 'block';
-  // Jika sudah berlangganan sebelumnya, tidak perlu ulang
-  if (!window._chatSubscribed) {
-    window._chatSubscribed = true;
-    initChatSubscription();
-  }
+  initChatSubscription();
 }
 
 function initChatSubscription() {
