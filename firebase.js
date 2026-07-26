@@ -114,4 +114,71 @@ export function subscribeChat(callback) {
   return () => off(ref(db, 'lks2026_chat'));
 }
 
+// ── Stream helpers ─────────────────────────────────────────────────
+
+/**
+ * Set stream config: mode ('camera'|'link'|'off') and optional url
+ */
+export async function setStreamConfig(config) {
+  await set(ref(db, 'lks2026_stream/config'), config);
+}
+
+/** Get stream config once */
+export async function getStreamConfig() {
+  const snap = await get(ref(db, 'lks2026_stream/config'));
+  return snap.exists() ? snap.val() : null;
+}
+
+/** Subscribe to stream config changes */
+export function subscribeStreamConfig(callback) {
+  const r = ref(db, 'lks2026_stream/config');
+  onValue(r, snap => callback(snap.exists() ? snap.val() : null));
+  return () => off(r);
+}
+
+/** WebRTC signaling — write offer (from admin/broadcaster) */
+export async function setOffer(sdp) {
+  await set(ref(db, 'lks2026_stream/signal/offer'), { sdp, ts: Date.now() });
+  // Clear old answers & candidates when new offer is created
+  await set(ref(db, 'lks2026_stream/signal/answers'), null);
+  await set(ref(db, 'lks2026_stream/signal/iceCandidates'), null);
+}
+
+/** WebRTC signaling — write answer (from viewer) */
+export async function pushAnswer(viewerId, sdp) {
+  await set(ref(db, `lks2026_stream/signal/answers/${viewerId}`), { sdp, ts: Date.now() });
+}
+
+/** WebRTC signaling — push ICE candidate */
+export async function pushIceCandidate(role, viewerId, candidate) {
+  const path = role === 'admin'
+    ? `lks2026_stream/signal/iceCandidates/admin/${viewerId}`
+    : `lks2026_stream/signal/iceCandidates/viewers/${viewerId}`;
+  await push(ref(db, path), { candidate, ts: Date.now() });
+}
+
+/** Subscribe to offer (viewer listens) */
+export function subscribeOffer(callback) {
+  const r = ref(db, 'lks2026_stream/signal/offer');
+  onValue(r, snap => callback(snap.exists() ? snap.val() : null));
+  return () => off(r);
+}
+
+/** Subscribe to answers (admin listens, per viewer) */
+export function subscribeAnswers(callback) {
+  const r = ref(db, 'lks2026_stream/signal/answers');
+  onValue(r, snap => callback(snap.exists() ? snap.val() : {}));
+  return () => off(r);
+}
+
+/** Subscribe to ICE candidates */
+export function subscribeIceCandidates(role, viewerId, callback) {
+  const path = role === 'viewer'
+    ? `lks2026_stream/signal/iceCandidates/admin/${viewerId}`
+    : `lks2026_stream/signal/iceCandidates/viewers/${viewerId}`;
+  const r = ref(db, path);
+  onValue(r, snap => callback(snap.exists() ? Object.values(snap.val()) : []));
+  return () => off(r);
+}
+
 export { db };
